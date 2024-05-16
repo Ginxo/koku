@@ -66,6 +66,20 @@ class OCPCloudUpdaterBase:
                 infra_map[str(provider.uuid)] = (self._provider_uuid, self._provider.type)
         return infra_map
 
+    def get_ocp_providers_wo_infra_map(self):
+        """Fetch list of OCP providers which have no infrastructure mapping.
+
+        Returns:
+            unmapped_ocp_providers list[uuids]: A list of providers without mappings
+                of the form [OpenShift Provider UUID,]
+
+        """
+        unmapped_ocp_providers = []
+        ps = Provider.objects.filter(infrastructure=None, type=Provider.PROVIDER_OCP)
+        for provider in ps:
+            unmapped_ocp_providers.append(str(provider.uuid))
+        return unmapped_ocp_providers
+
     def _generate_ocp_infra_map_from_sql_trino(self, start_date, end_date):
         """Get the OCP on X infrastructure map.
 
