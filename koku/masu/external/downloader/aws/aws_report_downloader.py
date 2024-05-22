@@ -195,6 +195,8 @@ class AWSReportDownloader(ReportDownloaderBase, DownloaderInterface):
         self.bucket = data_source.get("bucket")
         self.region_name = data_source.get("bucket_region")
         self.storage_only = data_source.get("storage_only")
+        # TODO! This would be looked up from the provider ideally. Maybe data_source.get("data_export", False)
+        self.data_export = True
 
         self._provider_uuid = kwargs.get("provider_uuid")
         self._region_kwargs = {"region_name": self.region_name} if self.region_name else {}
@@ -298,23 +300,38 @@ class AWSReportDownloader(ReportDownloaderBase, DownloaderInterface):
             self.report = ""
             return
 
-        # fetch details about the report from the cloud provider
-        defs = utils.get_cur_report_definitions(self._session.client("cur", region_name="us-east-1"))
-        if not self.report_name:
-            report_names = []
-            for report in defs.get("ReportDefinitions", []):
-                if self.bucket == report.get("S3Bucket"):
-                    report_names.append(report["ReportName"])
+        if not self.data_export:
+            # fetch details about the report from the cloud provider
+            defs = utils.get_cur_report_definitions(self._session.client("cur", region_name="us-east-1"))
+            if not self.report_name:
+                report_names = []
+                for report in defs.get("ReportDefinitions", []):
+                    if self.bucket == report.get("S3Bucket"):
+                        report_names.append(report["ReportName"])
 
-            # FIXME: Get the first report in the bucket until Koku can specify
-            # which report the user wants
-            if report_names:
-                self.report_name = report_names[0]
+                # FIXME: Get the first report in the bucket until Koku can specify
+                # which report the user wants
+                if report_names:
+                    self.report_name = report_names[0]
 
-        report_defs = defs.get("ReportDefinitions", [])
-        report = [rep for rep in report_defs if rep["ReportName"] == self.report_name]
+            report_defs = defs.get("ReportDefinitions", [])
+            report = [rep for rep in report_defs if rep["ReportName"] == self.report_name]
+        else:
+            # V2 reports have a completely different object structure
+            defs = utils.get_data_exports(self._session.client("bcm-data-exports", region_name="us-east-1"))
+            if not self.report_name:
+                report_names = []
+                for report in defs:
+                    if self.bucket == report.get("DestinationConfigurations").get("S3Destination").get("S3Bucket"):
+                        report_names.append(report["Name"])
+
+                if report_names:
+                    self.report_name = report_names[0]
+
+            report_defs = defs
+            report = [rep for rep in report_defs if rep["Name"] == self.report_name]
         if not report:
-            raise MasuProviderError("Cost and Usage Report definition not found.")
+            raise MasuProviderError("CUR or Data export not found.")
 
         self.report = report.pop()
 
@@ -367,10 +384,13 @@ class AWSReportDownloader(ReportDownloaderBase, DownloaderInterface):
         Returns:
             (String): "/prefix/report_name/YYYYMMDD-YYYYMMDD",
                     example: "/my-prefix/my-report/19701101-19701201"
-
         """
-        report_date_range = utils.month_date_range(date_time)
-        return "{}/{}/{}".format(self.report.get("S3Prefix"), self.report_name, report_date_range)
+        report_date_range = utils.month_date_range(date_time, self.data_export)
+        path_prefix = f"{self.report.get('S3Prefix')}/{self.report_name}/{report_date_range}"
+        if self.data_export:
+            # Data exports manifest path is prefix/report-v2/metadata/BILLING_PERIOD=2024-05/
+            path_prefix = f"{self.report.get('DestinationConfigurations').get('S3Destination').get('S3Prefix')}/{self.report_name}/metadata/{report_date_range}"
+        return path_prefix
 
     def download_file(self, key, stored_etag=None, manifest_id=None, start_date=None):
         """
@@ -383,7 +403,8 @@ class AWSReportDownloader(ReportDownloaderBase, DownloaderInterface):
             (String): The path and file name of the saved file
 
         """
-        if self.ingress_reports:
+        if self.ingress_reports or self.data_export:
+            # Similar to ingres reports the key name from that new manifest includes the bucket
             key = key.split(f"{self.bucket}/")[-1]
 
         s3_filename = key.split("/")[-1]
@@ -481,10 +502,11 @@ class AWSReportDownloader(ReportDownloaderBase, DownloaderInterface):
             # Skip download for storage only source
             if self.storage_only:
                 return report_dict
+            # The v2 manifest dont include a date so we pass in the billing period date instead
             manifest_file, manifest, manifest_timestamp = self._get_manifest(date)
             if manifest == self.empty_manifest:
                 return report_dict
-            manifest_dict = self._prepare_db_manifest_record(manifest)
+            manifest_dict = self._prepare_db_manifest_record(manifest, date)
             self._remove_manifest_file(manifest_file)
 
             if manifest_dict:
@@ -494,12 +516,12 @@ class AWSReportDownloader(ReportDownloaderBase, DownloaderInterface):
                     manifest_dict.get("num_of_files"),
                     manifest_timestamp,
                 )
-                report_dict["assembly_id"] = manifest.get("assemblyId")
+                # This needs to lookup from that manifest_dict since v2 reports use executionId instead of assembly
+                report_dict["assembly_id"] = manifest_dict.get("assembly_id")
                 report_dict["compression"] = self.report.get("Compression")
-                files_list = [
-                    {"key": key, "local_file": self.get_local_file_for_report(key)}
-                    for key in manifest.get("reportKeys")
-                ]
+                # V2 reports use a differnt key for report files. Just combining them here.
+                report_files = manifest.get("reportKeys", []) + manifest.get("dataFiles", [])
+                files_list = [{"key": key, "local_file": self.get_local_file_for_report(key)} for key in report_files]
         report_dict["manifest_id"] = manifest_id
         report_dict["files"] = files_list
         return report_dict
@@ -535,10 +557,16 @@ class AWSReportDownloader(ReportDownloaderBase, DownloaderInterface):
         """Get full path for local report file."""
         return utils.get_local_file_name(report)
 
-    def _prepare_db_manifest_record(self, manifest):
+    def _prepare_db_manifest_record(self, manifest, date):
         """Prepare to insert or update the manifest DB record."""
-        assembly_id = manifest.get("assemblyId")
-        billing_str = manifest.get("billingPeriod", {}).get("start")
-        billing_start = datetime.datetime.strptime(billing_str, self.manifest_date_format)
-        num_of_files = len(manifest.get("reportKeys", []))
+        # V2 manifests use executionId instead of assemblyId
+        assembly_id = manifest.get("executionId")
+        # V2 manifests dont include billing dates!
+        billing_start = date
+        num_of_files = len(manifest.get("dataFiles", []))
+        if not self.data_export:
+            assembly_id = manifest.get("assemblyId")
+            billing_str = manifest.get("billingPeriod", {}).get("start")
+            billing_start = datetime.datetime.strptime(billing_str, self.manifest_date_format)
+            num_of_files = len(manifest.get("reportKeys", []))
         return {"assembly_id": assembly_id, "billing_start": billing_start, "num_of_files": num_of_files}

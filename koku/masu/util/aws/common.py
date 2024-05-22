@@ -305,7 +305,39 @@ def get_cur_report_definitions(cur_client, role_arn=None, retries=7, max_wait_ti
                 raise
 
 
-def month_date_range(for_date_time):
+def get_data_exports(bcm_client, retries=7, max_wait_time=10):
+    """
+    Get data exports associated with a given RoleARN.
+
+    Args:
+        bcm_client      (str) RoleARN for AWS session
+        retries       (int) Number of times to retry if the connection fails
+        max_wait_time (int) Max amount of time to wait between retries
+
+    """
+    defs = []
+    for i in range(retries):  # Common retry logic added because AWS is randomly dropping connections
+        try:
+            # data exports client specifically the listing does not give you all the info for each export object.
+            # We have to list them all to grab the ExportArn's, then using those we can get each export and build our corectly structured list 
+            bcm_list = bcm_client.list_exports()
+            for rep in bcm_list.get("Exports", []):
+                defs.append(bcm_client.get_export(ExportArn=rep.get("ExportArn")).get("Export"))
+            return defs
+        except ClientError:
+            if i < (retries - 1):
+                delay = min(2**i, max_wait_time)
+                LOG.info(
+                    "AWS client error while listing data exports. "
+                    f"Attempt {i + 1} of {retries}. Retrying in {delay}s..."
+                )
+                time.sleep(delay)
+                continue
+            else:
+                raise
+
+
+def month_date_range(for_date_time, data_export=False):
     """
     Get a formatted date range string for the given date.
 
@@ -318,6 +350,8 @@ def month_date_range(for_date_time):
 
     Returns:
         (String): "YYYYMMDD-YYYYMMDD", example: "19701101-19701201"
+        or
+        (String): "BILLING_PERIOD=2024-05"
 
     """
     start_month = for_date_time
@@ -326,7 +360,12 @@ def month_date_range(for_date_time):
     start_month = start_month.replace(day=1)
     end_month = start_month + relativedelta(months=+1)
     timeformat = "%Y%m%d"
-    return f"{start_month.strftime(timeformat)}-{end_month.strftime(timeformat)}"
+    result = f"{start_month.strftime(timeformat)}-{end_month.strftime(timeformat)}"
+    if data_export:
+        # V2 reports use a completely different mapping for billing periods
+        timeformat = "%Y-%m"
+        result = f"BILLING_PERIOD={start_month.strftime(timeformat)}"
+    return result
 
 
 def get_assembly_id_from_cur_key(key):

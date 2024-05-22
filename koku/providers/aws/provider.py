@@ -19,6 +19,7 @@ from api.models import Provider
 from masu.processor import ALLOWED_COMPRESSIONS
 from masu.util.aws.common import AwsArn
 from masu.util.aws.common import get_cur_report_definitions
+from masu.util.aws.common import get_data_exports
 
 LOG = logging.getLogger(__name__)
 
@@ -81,21 +82,36 @@ def _check_cost_report_access(credential_name, credentials, bucket=None):
     """Check for provider cost and usage report access."""
     # Cost Usage Reorts service is currently only available in us-east-1
     # https://docs.aws.amazon.com/general/latest/gr/billing.html
-    cur_client = boto3.client("cur", region_name="us-east-1", **credentials)
     reports = None
+    data_export = False
 
     try:
-        response = get_cur_report_definitions(cur_client)
-        reports = response.get("ReportDefinitions", [])
+        # V2 reports use the data-exports client instead of cur
+        bcm_client = boto3.client("bcm-data-exports", region_name="us-east-1", **credentials)
+        reports = get_data_exports(bcm_client)
+        data_export = True
     except (ClientError, BotoConnectionError) as boto_error:
-        key = ProviderErrors.AWS_NO_REPORT_FOUND
-        message = f"Unable to obtain cost and usage report definition data with {credential_name}."
-        LOG.warning(msg=message, exc_info=boto_error)
-        raise serializers.ValidationError(error_obj(key, message))
+        try:
+            cur_client = boto3.client("cur", region_name="us-east-1", **credentials)
+            response = get_cur_report_definitions(cur_client)
+            reports = response.get("ReportDefinitions", [])
+        except (ClientError, BotoConnectionError) as boto_error:
+            key = ProviderErrors.AWS_NO_REPORT_FOUND
+            message = f"Unable to obtain report data with {credential_name}."
+            LOG.warning(msg=message, exc_info=boto_error)
+            raise serializers.ValidationError(error_obj(key, message))
 
     if reports and bucket:
         # filter report definitions to reports with a matching S3 bucket name.
-        bucket_matched = list(filter(lambda rep: bucket in rep.get("S3Bucket"), reports))
+        if data_export:
+            bucket_matched = list(
+                filter(
+                    lambda rep: bucket in rep.get("DestinationConfigurations").get("S3Destination").get("S3Bucket"),
+                    reports,
+                )
+            )
+        else:
+            bucket_matched = list(filter(lambda rep: bucket in rep.get("S3Bucket"), reports))
 
         if not bucket_matched:
             key = ProviderErrors.AWS_REPORT_CONFIG
@@ -105,17 +121,35 @@ def _check_cost_report_access(credential_name, credentials, bucket=None):
             raise serializers.ValidationError(error_obj(key, msg))
 
         for report in bucket_matched:
-            if report.get("Compression") not in ALLOWED_COMPRESSIONS:
+            compression_type = (
+                report.get("DestinationConfigurations")
+                .get("S3Destination")
+                .get("S3OutputConfigurations")
+                .get("Compression")
+                if data_export
+                else report.get("Compression")
+            )
+            if compression_type not in ALLOWED_COMPRESSIONS:
                 key = ProviderErrors.AWS_COMPRESSION_REPORT_CONFIG
                 internal_msg = (
                     f"{report.get('Compression')} compression is not supported. "
                     f"Reports must use GZIP compression format."
                 )
                 raise serializers.ValidationError(error_obj(key, internal_msg))
-            if "RESOURCES" not in report.get("AdditionalSchemaElements"):
-                key = ProviderErrors.AWS_REPORT_CONFIG
-                msg = f"Required Resource IDs are not included in report {report.get('ReportName')}"
-                raise serializers.ValidationError(error_obj(key, msg))
+            elements = report.get("AdditionalSchemaElements") if report.get("AdditionalSchemaElements") else []
+            if "RESOURCES" not in elements:
+                if (
+                    not report.get("DataQuery")
+                    .get("TableConfigurations")
+                    .get("COST_AND_USAGE_REPORT")
+                    .get("INCLUDE_RESOURCES")
+                ):
+                    key = ProviderErrors.AWS_REPORT_CONFIG
+                    name = report.get("ReportName") if report.get("ReportName") else report.get("Name")
+                    msg = f"Required Resource IDs are not included in report {name}"
+                    raise serializers.ValidationError(error_obj(key, msg))
+    # Return data_export flag here in case we want to use that for updating a provider
+    return data_export
 
 
 class AWSProvider(ProviderInterface):
@@ -162,7 +196,11 @@ class AWSProvider(ProviderInterface):
             internal_message = f"Bucket {storage_resource_name} could not be found with {role_arn}."
             raise serializers.ValidationError(error_obj(key, internal_message))
 
-        _check_cost_report_access(role_arn, creds, bucket=storage_resource_name)
+        data_export = _check_cost_report_access(role_arn, creds, bucket=storage_resource_name)
+        if data_export:
+            # TODO Maybe save something back to the provider record for future use during processing.
+            # data_export = True
+            LOG.info("AWS v2 data export.")
 
         return True
 
