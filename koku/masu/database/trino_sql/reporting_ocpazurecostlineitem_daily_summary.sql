@@ -395,8 +395,8 @@ cte_total_pv_capacity as (
     ) as combined_requests
 )
 SELECT azure.uuid as azure_uuid,
-    cast(NULL as varchar) as cluster_id,
-    cast(NULL as varchar) as cluster_alias,
+    max(ocp.cluster_id) as cluster_id,
+    max(ocp.cluster_alias) as cluster_alias,
     'Storage' as data_source,
     'Storage unattributed' as namespace,
     cast(NULL as varchar) as node,
@@ -411,11 +411,11 @@ SELECT azure.uuid as azure_uuid,
     max(azure.subscription_guid) as subscription_guid,
     max(azure.subscription_name) as subscription_name,
     max(nullif(azure.resource_location, '')) as resource_location,
-    cast(NULL as varchar) as unit_of_measure,
+    'GB-Mo' as unit_of_measure, -- Has to have this unit to show up on ocp on cloud storage endpoint
     cast(NULL as double) as usage_quantity,
     max(azure.currency) as currency,
-    (max(az_disk.capacity) - max(persistentvolumeclaim_capacity_gigabyte)) / max(az_disk.capacity) * max(cast(azure.pretax_cost as decimal(24,9)))  as pretax_cost,
-    ((max(az_disk.capacity) - max(persistentvolumeclaim_capacity_gigabyte)) / max(az_disk.capacity) * max(cast(azure.pretax_cost as decimal(24,9)))) * cast({{markup}} as decimal(24,9)) as markup_cost, -- pretax_cost x markup = markup_cost
+    max(cast(azure.pretax_cost as decimal(24,9)))  as pretax_cost,
+    max(cast(azure.pretax_cost as decimal(24,9))) * cast({{markup}} as decimal(24,9)) as markup_cost,
     cast(NULL as double) as pod_cost,
     cast(NULL as double) as project_markup_cost,
     cast(NULL as double) as pod_usage_cpu_core_hours,
@@ -623,8 +623,8 @@ SELECT
     disk_cost.month as month
 FROM (
     SELECT azure.uuid as azure_uuid,
-        cast(NULL as varchar) as cluster_id,
-        cast(NULL as varchar) as cluster_alias,
+        max(ocp.cluster_id) as cluster_id,
+        max(ocp.cluster_alias) as cluster_alias,
         'Storage' as data_source,
         'Storage unattributed' as namespace,
         cast(NULL as varchar) as node,
@@ -639,7 +639,7 @@ FROM (
         max(azure.subscription_guid) as subscription_guid,
         max(azure.subscription_name) as subscription_name,
         max(nullif(azure.resource_location, '')) as resource_location,
-        cast(NULL as varchar) as unit_of_measure,
+        'GB-Mo' as unit_of_measure, -- Has to have this unit to show up on storage endpoint
         cast(NULL as double) as usage_quantity,
         max(azure.currency) as currency,
         (max(az_disk.capacity) - max(persistentvolumeclaim_capacity_gigabyte)) / max(az_disk.capacity) * max(cast(azure.pretax_cost as decimal(24,9)))  as pretax_cost,

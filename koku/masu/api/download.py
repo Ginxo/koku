@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.settings import api_settings
 
 from masu.celery.tasks import check_report_updates
+from masu.verification.unattributed_storage import VerifyUnattributedStorage
 
 LOG = logging.getLogger(__name__)
 
@@ -36,4 +37,10 @@ def download_report(request):
         bill_date=bill_date,
         summarize_reports=summarize_reports,
     )
-    return Response({"Download Request Task ID": str(async_download_result)})
+    class_obj = VerifyUnattributedStorage("org1234567", "ca4f603c-1ece-4ef7-925f-e472a51494a3")
+    class_obj.verify_cost()
+
+    return Response({"Download Request Task ID": async_download_result})
+    # class_obj = VerifyUnattributedStorage("org1234567", "ca4f603c-1ece-4ef7-925f-e472a51494a3")
+    # class_obj.verify_cost()
+    # return Response({"Download Request Task ID": "?"})

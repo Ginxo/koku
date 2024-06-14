@@ -1114,6 +1114,7 @@ def remove_stale_tenants():
 @celery_app.task(name="masu.processor.tasks.process_openshift_on_cloud", queue=GET_REPORT_FILES_QUEUE, bind=True)
 def process_openshift_on_cloud(self, schema_name, provider_uuid, bill_date, tracing_id=None):
     """Process OpenShift on Cloud parquet files using Trino."""
+    # TODO: Requeue task
     provider = Provider.objects.get(uuid=provider_uuid)
     provider_type = provider.type.replace("-local", "")
 
@@ -1174,6 +1175,7 @@ def process_daily_openshift_on_cloud(
     self, schema_name, provider_uuid, bill_date, start_date, end_date, tracing_id=None
 ):
     """Process daily partitioned OpenShift on Cloud parquet files using Trino."""
+    # TODO: Requeue task
     provider = Provider.objects.get(uuid=provider_uuid)
     provider_type = provider.type.replace("-local", "")
 

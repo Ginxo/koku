@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 """Asynchronous tasks."""
+import importlib
 import json
 import logging
 import math
@@ -32,6 +33,7 @@ from api.utils import DateHelper
 from koku import celery_app
 from koku.notifications import NotificationService
 from masu.api.upgrade_trino.util.verify_parquet_files import VerifyParquetFiles
+from masu.celery.common import COST_VERIFICATION_TASK
 from masu.config import Config
 from masu.database.cost_model_db_accessor import CostModelDBAccessor
 from masu.database.ocp_report_db_accessor import OCPReportDBAccessor
@@ -611,3 +613,13 @@ def get_celery_queue_items(self, queue_name=None, task_name=None):
 def trigger_delayed_tasks(*args, **kwargs):
     """Removes the expired records starting the delayed celery tasks."""
     DelayedCeleryTasks.trigger_delayed_tasks()
+
+
+@celery_app.task(name=COST_VERIFICATION_TASK, queue=GET_REPORT_FILES_QUEUE)
+def cost_verification(*args, **kwargs):
+    module_path = kwargs.get("module_path")
+    class_name = kwargs.get("class_name")
+    module = importlib.import_module(module_path)
+    verification_class = getattr(module, class_name)
+    vc = verification_class(*args)
+    vc.verify_cost(**kwargs)

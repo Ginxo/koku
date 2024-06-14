@@ -35,6 +35,7 @@ from masu.api.views import pg_engine_version
 from masu.api.views import process_openshift_on_cloud
 from masu.api.views import purge_trino_files
 from masu.api.views import report_data
+from masu.api.views import run_delayed_tasks
 from masu.api.views import running_celery_tasks
 from masu.api.views import schema_sizes
 from masu.api.views import stat_activity
@@ -51,6 +52,7 @@ ROUTER.register(r"manifests", ManifestStatusViewSet, basename="manifests")
 
 
 urlpatterns = [
+    path("run_delayed_tasks/", run_delayed_tasks, name="run_delayed_tasks"),
     path("fix_parquet/", fix_parquet, name="fix_parquet"),
     path("status/", get_status, name="server-status"),
     path("download/", download_report, name="report_download"),

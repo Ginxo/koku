@@ -25,6 +25,7 @@ from masu.database import OCP_REPORT_TABLE_MAP
 from masu.database.report_db_accessor_base import ReportDBAccessorBase
 from masu.processor import is_feature_cost_3592_tag_mapping_enabled
 from masu.processor import is_feature_unattributed_storage_enabled
+from masu.verification.unattributed_storage import VerifyUnattributedStorage
 from reporting.models import OCP_ON_ALL_PERSPECTIVES
 from reporting.models import OCP_ON_AZURE_PERSPECTIVES
 from reporting.models import OCPAllCostLineItemDailySummaryP
@@ -319,6 +320,7 @@ class AzureReportDBAccessor(SQLScriptAtomicExecutorMixin, ReportDBAccessorBase):
 
         sql = pkgutil.get_data("masu.database", "trino_sql/reporting_ocpazurecostlineitem_daily_summary.sql")
         sql = sql.decode("utf-8")
+        unattributed_storage_check = is_feature_unattributed_storage_enabled(self.schema)
         sql_params = {
             "uuid": str(openshift_provider_uuid).replace("-", "_"),
             "schema": self.schema,
@@ -334,11 +336,13 @@ class AzureReportDBAccessor(SQLScriptAtomicExecutorMixin, ReportDBAccessorBase):
             "markup": markup_value or 0,
             "pod_column": pod_column,
             "node_column": node_column,
-            "unattributed_storage": is_feature_unattributed_storage_enabled(self.schema),
+            "unattributed_storage": unattributed_storage_check,
         }
         ctx = self.extract_context_from_sql_params(sql_params)
         LOG.info(log_json(msg="running OCP on Azure SQL", context=ctx))
         self._execute_trino_multipart_sql_query(sql, bind_params=sql_params)
+        if unattributed_storage_check:
+            VerifyUnattributedStorage(self.schema, openshift_provider_uuid).create_delayed_task()
 
     def update_line_item_daily_summary_with_tag_mapping(self, start_date, end_date, bill_ids=None):
         """
