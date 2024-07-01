@@ -340,7 +340,7 @@ _koku-wait:
      done
 
 docker-build:
-	$(DOCKER_COMPOSE) build --build-arg TARGETARCH=$(TARGETARCH) koku-base
+	$(DOCKER_COMPOSE) build --build-arg TARGETARCH=$(shell uname -m)  koku-base
 
 docker-up: docker-build
 	$(DOCKER_COMPOSE) up -d --scale koku-worker=$(scale)
