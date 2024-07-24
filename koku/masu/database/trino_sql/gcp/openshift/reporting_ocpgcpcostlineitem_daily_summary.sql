@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpgcpcostlineite
     ocp_source varchar,
     year varchar,
     month varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['ocp_source', 'year', 'month'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['ocp_source', 'year', 'month'])
 ;
 
 -- Now create our proper table if it does not exist
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpgcpcostlineite
     year varchar,
     month varchar,
     day varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['gcp_source', 'ocp_source', 'year', 'month', 'day'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['gcp_source', 'ocp_source', 'year', 'month', 'day'])
 ;
 
 -- OCP ON GCP kubernetes-io-cluster-{cluster_id} label is applied on the VM and is exclusively a pod cost

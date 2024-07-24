@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS {{schema | sqlsafe}}.azure_openshift_daily_resource_m
     ocp_source varchar,
     year varchar,
     month varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['ocp_source', 'year', 'month'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['ocp_source', 'year', 'month'])
 ;
 
 CREATE TABLE IF NOT EXISTS {{schema | sqlsafe}}.azure_openshift_daily_tag_matched_temp
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS {{schema | sqlsafe}}.azure_openshift_daily_tag_matche
     ocp_source varchar,
     year varchar,
     month varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['ocp_source', 'year', 'month'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['ocp_source', 'year', 'month'])
 ;
 
 CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpazurecostlineitem_project_daily_summary_temp
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpazurecostlinei
     ocp_source varchar,
     year varchar,
     month varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['ocp_source', 'year', 'month'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['ocp_source', 'year', 'month'])
 ;
 
 -- Now create our proper table if it does not exist
@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpazurecostlinei
     year varchar,
     month varchar,
     day varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['azure_source', 'ocp_source', 'year', 'month', 'day'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['azure_source', 'ocp_source', 'year', 'month', 'day'])
 ;
 
 -- Now create our proper table if it does not exist
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.azure_openshift_disk_capaci
     ocp_source varchar,
     year varchar,
     month varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['ocp_source', 'year', 'month'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['ocp_source', 'year', 'month'])
 ;
 
 

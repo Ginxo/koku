@@ -235,6 +235,19 @@ class ReportDBAccessorBase:
         set_value_in_cache(cache_key, exists)
         return exists
 
+    # def sync_hive_partitions(self, table_name):
+    #     """Sync hive partition metadata for new partitions."""
+    #     LOG.info(
+    #         log_json(
+    #             msg="syncing trino/hive partitions",
+    #             schema=self.schema,
+    #             table=table_name,
+    #         )
+    #     )
+    #     sql = f"CALL system.sync_partition_metadata('{self.schema}', '{table_name}', 'FULL')"
+    #     LOG.info(sql)
+    #     self._execute_trino_raw_sql_query(sql, log_ref="sync partitions")
+
     def delete_hive_partition_by_month(self, table, source, year, month):
         """Deletes partitions individually by month."""
         retries = settings.HIVE_PARTITION_DELETE_RETRIES

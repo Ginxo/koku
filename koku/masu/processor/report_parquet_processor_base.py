@@ -122,7 +122,7 @@ class ReportParquetProcessorBase:
     def _generate_create_table_sql(self, partition_map=None):
         """Generate SQL to create table."""
         parquet_columns = self._generate_column_list()
-        s3_path = f"{settings.S3_BUCKET_NAME}/{self._s3_path}"
+        # s3_path = f"{settings.S3_BUCKET_NAME}/{self._s3_path}"
 
         sql = f"CREATE TABLE IF NOT EXISTS {self._schema_name}.{self._table_name} ("
         for idx, col in enumerate(parquet_columns):
@@ -144,18 +144,15 @@ class ReportParquetProcessorBase:
             sql += ", "
             sql += ",".join([f"{item[0]} {item[1]} " for item in list(partition_map.items())])
             partition_column_str = ", ".join([f"'{key}'" for key in partition_map.keys()])
-            sql += (
-                f") WITH(external_location = 's3a://{s3_path}', format = 'PARQUET',"
-                f" partitioned_by=ARRAY[{partition_column_str}])"
-            )
+            sql += f") WITH(format = 'PARQUET'," f" partitioning=ARRAY[{partition_column_str}])"
         else:
             # Use the default partition columns
             sql += ",source varchar, year varchar, month varchar"
+            sql += ") WITH(format = 'PARQUET'," " partitioning=ARRAY['source', 'year', 'month'])"
 
-            sql += (
-                f") WITH(external_location = 's3a://{s3_path}', format = 'PARQUET',"
-                " partitioned_by=ARRAY['source', 'year', 'month'])"
-            )
+        LOG.debug("THIS IS THE CREATE TABLE SQL")
+        LOG.debug(sql)
+
         return sql
 
     def create_table(self, partition_map=None):
@@ -227,5 +224,6 @@ class ReportParquetProcessorBase:
             )
         )
         sql = f"CALL system.sync_partition_metadata('{self._schema_name}', '{self._table_name}', 'FULL')"
+        "CALL system.add_files(table => 'self._table_name', source_table => '`parquet`.`path/to/table`');"
         LOG.info(sql)
         self._execute_sql(sql, self._schema_name)

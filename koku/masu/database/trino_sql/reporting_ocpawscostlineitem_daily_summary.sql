@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS {{schema | sqlsafe}}.aws_openshift_daily_resource_mat
     ocp_source varchar,
     year varchar,
     month varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['ocp_source', 'year', 'month'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['ocp_source', 'year', 'month'])
 ;
 
 CREATE TABLE IF NOT EXISTS {{schema | sqlsafe}}.aws_openshift_daily_tag_matched_temp
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS {{schema | sqlsafe}}.aws_openshift_daily_tag_matched_
     ocp_source varchar,
     year varchar,
     month varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['ocp_source', 'year', 'month'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['ocp_source', 'year', 'month'])
 ;
 
 CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpawscostlineitem_project_daily_summary_temp
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpawscostlineite
     ocp_source varchar,
     year varchar,
     month varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['ocp_source', 'year', 'month'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['ocp_source', 'year', 'month'])
 ;
 
 -- Now create our proper table if it does not exist
@@ -159,8 +159,14 @@ CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpawscostlineite
     year varchar,
     month varchar,
     day varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['aws_source', 'ocp_source', 'year', 'month', 'day'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['aws_source', 'ocp_source', 'year', 'month', 'day'])
 ;
+
+-- CALL system.sync_partition_metadata('{{schema | sqlsafe}}', 'aws_openshift_daily', 'FULL')
+-- ;
+-- CALL system.sync_partition_metadata('{{schema | sqlsafe}}', 'reporting_ocpusagelineitem_daily_summary', 'FULL')
+-- ;
+
 
 INSERT INTO hive.{{schema | sqlsafe}}.aws_openshift_daily_resource_matched_temp (
     uuid,

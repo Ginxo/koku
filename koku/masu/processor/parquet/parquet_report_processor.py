@@ -517,7 +517,7 @@ class ParquetReportProcessor:
                 processor.create_table(partition_map=partition_map)
             self.trino_table_exists[self.trino_table_exists_key] = True
             processor.get_or_create_postgres_partition(bill_date=self.bill_date)
-            processor.sync_hive_partitions()
+            # processor.sync_hive_partitions()
             if not daily:
                 processor.create_bill(bill_date=self.bill_date)
 

@@ -459,7 +459,7 @@ services:
       - POSTGRES_DB=${DATABASE_NAME-postgres}
       - POSTGRES_USER=${DATABASE_USER-postgres}
       - POSTGRES_PASSWORD=${DATABASE_PASSWORD-postgres}
-      - _PG_CREATE_DATABASES=${DATABASE_NAME-postgres}|${DATABASE_USER-postgres},unleash|${DATABASE_USER-postgres}
+      - _PG_CREATE_DATABASES=${DATABASE_NAME-postgres}|${DATABASE_USER-postgres},unleash|${DATABASE_USER-postgres},nessie|${DATABASE_USER-postgres}
     ports:
       - ${POSTGRES_SQL_SERVICE_PORT-15432}:5432
     volumes:
@@ -626,32 +626,32 @@ services:
       /usr/bin/mc anonymous set public local/metastore;
       "
 
-  hive-metastore:
-    container_name: hive-metastore
-    image: quay.io/samdoran/ubi-hive:3.1.3-metastore-036
-    ports:
-      - 9083:8000
-    environment:
-      - HIVE_LOGLEVEL=INFO
-      - S3_HOST=koku-minio
-      - S3_PORT=9000
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY-kokuminioaccess}
-      - S3_SECRET=${S3_SECRET-kokuminiosecret}
-      - S3_BUCKET_NAME=${S3_BUCKET_NAME-koku-bucket}
-      - S3_BUCKET_PATH=${S3_BUCKET_PATH-data}
-      - POSTGRES_SQL_SERVICE_HOST=db
-      - POSTGRES_SQL_SERVICE_PORT=5432
-      - DATABASE_NAME=${DATABASE_NAME-hive}
-      - DATABASE_USER=${DATABASE_USER-hive}
-      - DATABASE_PASSWORD=${DATABASE_PASSWORD-hive}
-    depends_on:
-      - db
-      - minio
-      - create-parquet-bucket
+  # hive-metastore:
+  #   container_name: hive-metastore
+  #   image: quay.io/samdoran/ubi-hive:3.1.3-metastore-036
+  #   ports:
+  #     - 9083:8000
+  #   environment:
+  #     - HIVE_LOGLEVEL=INFO
+  #     - S3_HOST=koku-minio
+  #     - S3_PORT=9000
+  #     - S3_ACCESS_KEY=${S3_ACCESS_KEY-kokuminioaccess}
+  #     - S3_SECRET=${S3_SECRET-kokuminiosecret}
+  #     - S3_BUCKET_NAME=${S3_BUCKET_NAME-koku-bucket}
+  #     - S3_BUCKET_PATH=${S3_BUCKET_PATH-data}
+  #     - POSTGRES_SQL_SERVICE_HOST=db
+  #     - POSTGRES_SQL_SERVICE_PORT=5432
+  #     - DATABASE_NAME=${DATABASE_NAME-hive}
+  #     - DATABASE_USER=${DATABASE_USER-hive}
+  #     - DATABASE_PASSWORD=${DATABASE_PASSWORD-hive}
+  #   depends_on:
+  #     - db
+  #     - minio
+  #     - create-parquet-bucket
 
   trino:
     container_name: trino
-    image: quay.io/samdoran/ubi-trino:443-002
+    image: quay.io/mskarbek/ubi-trino:450-001
     user: root
     ports:
       - 8080:8080
@@ -678,11 +678,31 @@ services:
       - ./dev/containers/trino/etc/hadoop-config/core-site.xml:/etc/trino/hadoop-config/core-site.xml
       - ./dev/containers/trino/data:/data/trino/data
       - ./dev/containers/trino/logs:/data/trino/logs
-    links:
-      - hive-metastore
+    # links:
+    #   - hive-metastore
     depends_on:
-      - hive-metastore
+      # - hive-metastore
+      - nessie
     ulimits:
       nofile:
         soft: 4096
         hard: 4096
+
+  nessie:
+    container_name: nessie
+    image: quay.io/projectnessie/nessie:0.93.1
+    ports:
+      # API port
+      - "19120:19120"
+      # Management port (metrics and health checks)
+      - "9999:9000"
+    depends_on:
+      - db
+      - minio
+      - create-parquet-bucket
+    environment:
+      - nessie.version.store.type=JDBC
+      - nessie.version.store.persist.jdbc.datasource=postgresql
+      - quarkus.datasource.postgresql.jdbc.url=jdbc:postgresql://db:5432/nessie
+      - quarkus.datasource.postgresql.username=postgres
+      - quarkus.datasource.postgresql.password=postgres

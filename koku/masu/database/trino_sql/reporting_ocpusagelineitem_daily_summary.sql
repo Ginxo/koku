@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS hive.{{schema | sqlsafe}}.reporting_ocpusagelineitem_
     year varchar,
     month varchar,
     day varchar
-) WITH(format = 'PARQUET', partitioned_by=ARRAY['source', 'year', 'month', 'day'])
+) WITH(format = 'PARQUET', partitioning=ARRAY['source', 'year', 'month', 'day'])
 ;
 
 INSERT INTO hive.{{schema | sqlsafe}}.reporting_ocpusagelineitem_daily_summary (
