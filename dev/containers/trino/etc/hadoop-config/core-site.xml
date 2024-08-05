@@ -1,7 +1,7 @@
 <configuration>
   <property>
       <name>fs.defaultFS</name>
-      <value>s3a://koku-bucket/</value>
+      <value>s3a://mskarbek-glue/</value>
   </property>
   <property>
       <name>fs.gs.impl</name>

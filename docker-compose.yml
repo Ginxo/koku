@@ -686,3 +686,30 @@ services:
       nofile:
         soft: 4096
         hard: 4096
+
+  nessie:
+    container_name: nessie
+    image: quay.io/projectnessie/nessie:0.93.1
+    ports:
+      # API port
+      - "19120:19120"
+      # Management port (metrics and health checks)
+      - "9999:9000"
+    depends_on:
+      - db
+      - minio
+      - create-parquet-bucket
+    environment:
+      - nessie.version.store.type=JDBC
+      - nessie.version.store.persist.jdbc.datasource=postgresql
+      - quarkus.datasource.postgresql.jdbc.url=jdbc:postgresql://db:5432/nessie
+      - quarkus.datasource.postgresql.username=postgres
+      - quarkus.datasource.postgresql.password=postgres
+      - nessie.catalog.default-warehouse=warehouse
+      - nessie.catalog.warehouses.warehouse.location=s3://koku-bucket
+
+      - nessie.catalog.service.s3.default-options.region=us-east-1
+      - nessie.catalog.service.s3.default-options.access-key.name=kokuminioaccess
+      - nessie.catalog.service.s3.default-options.access-key.secret=kokuminiosecret
+      - nessie.catalog.service.s3.default-options.endpoint=http://koku-minio:9000
+      - nessie.catalog.service.s3.default-options.path-style-access=true
